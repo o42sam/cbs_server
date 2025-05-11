@@ -6,7 +6,7 @@ from beanie import PydanticObjectId, Link
 
 from app.api.v1.schemas.account import (
     AccountCreate, AccountRead, AccountLimitUpdate, AccountStatusUpdate,
-    AccountStatusRead, TransferRequest, TransferResponse, UserOwner
+    AccountStatusRead, UserOwner
 )
 
 from app.schemas.user import User
@@ -303,56 +303,3 @@ async def delete_account(
          raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
     except AccountError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
-
-
-
-
-@router.post(
-    "/transfer",
-    response_model=TransferResponse,
-    summary="Transfer funds between accounts"
-)
-async def transfer_funds(
-    transfer_data: TransferRequest,
-    current_user: User = Depends(get_current_user),
-
-    service: TransactionService = Depends(get_transaction_service)
-):
-    """
-    Transfers a specified amount from the user's source account to a destination account.
-    Requires authentication. The user must own the source account.
-    Uses Account ID or Account Number for source/destination identifiers.
-    """
-    try:
-        transaction_record = await service.transfer_funds(
-            source_identifier=transfer_data.source_identifier,
-            dest_identifier=transfer_data.destination_identifier,
-            amount=transfer_data.amount,
-            requesting_user=current_user
-        )
-
-        return TransferResponse(
-            message="Transfer successful",
-            transaction_id=transaction_record.id,
-            source_account_id=transaction_record.source_account_id.id,
-            destination_account_id=transaction_record.destination_account_id.id,
-            amount=transaction_record.amount,
-            currency=transaction_record.currency,
-            timestamp=transaction_record.created
-        )
-
-    except (AccountNotFoundError, InsufficientFundsError, DailyLimitExceededError,
-            BalanceLimitExceededError, AccountStatusError, SameAccountTransferError,
-            CurrencyMismatchError, InvalidAmountError) as e:
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
-    except UnauthorizedError as e:
-
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=e.message)
-    except AppException as e:
-
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.message)
-    except Exception as e:
-
-        print(f"Unexpected error during funds transfer: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An internal error occurred during the transfer.")
